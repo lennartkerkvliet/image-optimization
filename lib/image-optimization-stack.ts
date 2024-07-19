@@ -57,37 +57,6 @@ export class ImageOptimizationStack extends Stack {
     LAMBDA_MEMORY = this.node.tryGetContext('LAMBDA_MEMORY') || LAMBDA_MEMORY;
     LAMBDA_TIMEOUT = this.node.tryGetContext('LAMBDA_TIMEOUT') || LAMBDA_TIMEOUT;
     MAX_IMAGE_SIZE = this.node.tryGetContext('MAX_IMAGE_SIZE') || MAX_IMAGE_SIZE;
-    DEPLOY_SAMPLE_WEBSITE = this.node.tryGetContext('DEPLOY_SAMPLE_WEBSITE') || DEPLOY_SAMPLE_WEBSITE;
-    
-
-    // deploy a sample website for testing if required
-    if (DEPLOY_SAMPLE_WEBSITE === 'true') {
-      var sampleWebsiteBucket = new s3.Bucket(this, 's3-sample-website-bucket', {
-        removalPolicy: RemovalPolicy.DESTROY,
-        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        enforceSSL: true,
-        autoDeleteObjects: true,
-      });
-
-      var sampleWebsiteDelivery = new cloudfront.Distribution(this, 'websiteDeliveryDistribution', {
-        comment: 'image optimization - sample website',
-        defaultRootObject: 'index.html',
-        defaultBehavior: {
-          origin: new origins.S3Origin(sampleWebsiteBucket),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        }
-      });
-
-      new CfnOutput(this, 'SampleWebsiteDomain', {
-        description: 'Sample website domain',
-        value: sampleWebsiteDelivery.distributionDomainName
-      });
-      new CfnOutput(this, 'SampleWebsiteS3Bucket', {
-        description: 'S3 bucket use by the sample website',
-        value: sampleWebsiteBucket.bucketName
-      });
-    }
 
     // For the bucket having original images, either use an external one, or create one with some samples photos.
     var originalImageBucket;
@@ -102,6 +71,7 @@ export class ImageOptimizationStack extends Stack {
     } else {
       originalImageBucket = new s3.Bucket(this, 's3-sample-original-image-bucket', {
         removalPolicy: RemovalPolicy.DESTROY,
+        bucketName: "idealogo-storage",
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         encryption: s3.BucketEncryption.S3_MANAGED,
         enforceSSL: true,
@@ -122,6 +92,7 @@ export class ImageOptimizationStack extends Stack {
     if (STORE_TRANSFORMED_IMAGES === 'true') {
       transformedImageBucket = new s3.Bucket(this, 's3-transformed-image-bucket', {
         removalPolicy: RemovalPolicy.DESTROY,
+        bucketName: "idealogo-storage-transformed",
         autoDeleteObjects: true,
         lifecycleRules: [
           {
@@ -152,6 +123,7 @@ export class ImageOptimizationStack extends Stack {
     var lambdaProps = {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
+      functionName: "image-optimization",
       code: lambda.Code.fromAsset('functions/image-processing'),
       timeout: Duration.seconds(parseInt(LAMBDA_TIMEOUT)),
       memorySize: parseInt(LAMBDA_MEMORY),
@@ -202,7 +174,7 @@ export class ImageOptimizationStack extends Stack {
     // Create a CloudFront Function for url rewrites
     const urlRewriteFunction = new cloudfront.Function(this, 'urlRewrite', {
       code: cloudfront.FunctionCode.fromFile({ filePath: 'functions/url-rewrite/index.js', }),
-      functionName: `urlRewriteFunction${this.node.addr}`,
+      functionName: `url-rewrite`,
     });
 
     var imageDeliveryCacheBehaviorConfig: ImageDeliveryCacheBehaviorConfig = {
